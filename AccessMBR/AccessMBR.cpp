@@ -14,6 +14,8 @@
 
 #include "stdafx.h"
 #include "Windows.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #define BOOTSIG1 0x55
 #define BOOTSIG2 0xAA
@@ -22,7 +24,14 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	DWORD read, wrote, pos;
 	unsigned char buf[512];
-	HANDLE hDisk = CreateFileA("\\\\.\\PhysicalDrive0", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_NO_BUFFERING|FILE_FLAG_RANDOM_ACCESS, NULL);
+	int drivenumber = 0;
+	char drivestr[512];
+	if (argc > 1) {
+		drivenumber = atoi(argv[1]); 
+	}
+	_snprintf_s(drivestr, 512, _TRUNCATE, "\\\\.\\PhysicalDrive%d", drivenumber);
+	printf("Accessing: %s\n", drivestr);
+	HANDLE hDisk = CreateFileA(drivestr, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_NO_BUFFERING|FILE_FLAG_RANDOM_ACCESS, NULL);
 	if (!ReadFile(hDisk, buf, 512, &read, 0)) {
 		printf("Read failed\n");
 		return 0;
@@ -41,7 +50,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		printf("Write failed\n");
 		return 0;
 	}
-	printf("Succesfully read/wrote sector 0 on PhysicalDrive0: read %d, wrote: %d\n", read, wrote);
+	printf("Succesfully read/wrote sector 0 on PhysicalDrive %d: read %d, wrote: %d\n", drivenumber, read, wrote);
+	CloseHandle(hDisk);
 	return 0;
 }
 

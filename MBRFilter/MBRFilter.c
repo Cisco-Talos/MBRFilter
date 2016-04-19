@@ -5,11 +5,14 @@
   The goal of this filter is to prevent writing to Sector 0 on Physical Drive 0. 
   This is useful to prevent malware that overwrites the MBR like Petya.
 
-  While the MBR could be on another disk, we try to remain minimally intrusive: writing to 
-  sector 0 on other drives might be desirable. This can easily be changed by modifying 
-  the if statement at line 237.
+  This driver will prevent writes to sector 0 on all drives. This can cause an
+  issue when initializing a new disk in the Disk Management application. Hit 
+  'Cancel' when asks you to write to the MBR/GPT and it should work as expected.
+  Alternatively, if OK was clicked, then quitting and restarting the application
+  will allow partitoning/formatting.
 
-  To install: double click the inf file and reboot.
+
+  To install: right click the inf file, select 'install' and reboot when prompted.
   To access sector 0 on drive 0: boot into Safe Mode. 
   To compile: make sure to set:
 	MBRFilter properties -> Configuration properties -> Driver Signing -> General
@@ -233,10 +236,10 @@ NTSTATUS MBRFReadWrite(IN PDEVICE_OBJECT DeviceObject,IN PIRP Irp) {
 
     IoCopyCurrentIrpStackLocationToNext(Irp);
 	if ((currentIrpStack->MajorFunction == IRP_MJ_WRITE) && currentIrpStack->Parameters.Write.Length) {
-		if (currentIrpStack->Parameters.Write.ByteOffset.QuadPart / 512 == 0 && deviceExtension->DiskNumber == 0 && deviceExtension->PartitionNumber == 0) {
+		if (currentIrpStack->Parameters.Write.ByteOffset.QuadPart / 512 == 0) {
 			DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "MBRF: write sector 0 (disk %d, partition %d)\n", deviceExtension->DiskNumber, deviceExtension->PartitionNumber);
 			RtlInitUnicodeString(&title, L"Cisco Talos MBRFilter");
-			RtlInitUnicodeString(&text, L"Cannot write to sector 0 on drive 0. Please reboot in Safe Mode if you wish to do this.");
+			RtlInitUnicodeString(&text, L"Cannot write to sector 0 on this disk. Please reboot in Safe Mode if you wish to do this.\nIf you are attempting to initialize a new disk in the 'Disk Management' application, please exit and restart the application");
 			param[0]= (ULONG_PTR) &text;
 			param[1]= (ULONG_PTR) &title;
 			param[2]= 0x40;
