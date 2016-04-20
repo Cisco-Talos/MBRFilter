@@ -10,7 +10,8 @@
   'Cancel' when asks you to write to the MBR/GPT and it should work as expected.
   Alternatively, if OK was clicked, then quitting and restarting the application
   will allow partitoning/formatting.
-
+  
+  Note this can still be byopassed by a sending a SCSI passthrough command
 
   To install: right click the inf file, select 'install' and reboot when prompted.
   To access sector 0 on drive 0: boot into Safe Mode. 
