@@ -4,13 +4,13 @@
   The goal of this filter is to prevent writing to Sector 0 on Physical Drive 0. 
   This is useful to prevent malware that overwrites the MBR like Petya.
 
-
-
   This driver will prevent writes to sector 0 on all drives. This can cause an 
   issue when initializing a new disk in the Disk Management application. Hit 
   'Cancel' when asks you to write to the MBR/GPT and it should work as expected.
   Alternatively, if OK was clicked, then quitting and restarting the application
   will allow partitoning/formatting.
+  
+  Note this can still be byopassed by a sending a SCSI passthrough command
 
   To install: Right click the inf file, select 'install' and reboot when prompted.
   To access sector 0 on drive 0: boot into Safe Mode. 
