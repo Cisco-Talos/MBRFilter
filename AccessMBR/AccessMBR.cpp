@@ -46,7 +46,7 @@ BOOL doWrite(HANDLE hDisk, unsigned char *buf, DWORD read, int drivenumber, char
 	if (success)
 		printf("Succesfully read/wrote sector 0 on PhysicalDrive %d: read %d, wrote: %d\n", drivenumber, read, wrote);
 	else
-		printf("Write failed on PhysicalDrive %d", drivenumber);
+		printf("Write failed on PhysicalDrive %d\n", drivenumber);
 	return success;
 }
 
