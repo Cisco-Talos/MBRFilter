@@ -1,11 +1,12 @@
 /*++
   MBRFilter
 
-  This is a simple disk filter based on Microsoft's diskperf example driver.
-  The goal of this filter is to prevent writing to Sector 0 on Physical Drive 0. 
+  This is a simple disk filter based on Microsoft's diskperf and classpnp example drivers.
+
+  The goal of this filter is to prevent writing to Sector 0 on disks.
   This is useful to prevent malware that overwrites the MBR like Petya.
 
-  This driver will prevent writes to sector 0 on all drives. This can cause an
+  This driver will prevent writes to sector 0 on all drives. This can cause an 
   issue when initializing a new disk in the Disk Management application. Hit 
   'Cancel' when asks you to write to the MBR/GPT and it should work as expected.
   Alternatively, if OK was clicked, then quitting and restarting the application
@@ -22,8 +23,10 @@
   Written by Yves Younan, Cisco Talos
   Copyright (C) 2016 Cisco Systems Inc
 
-
+  Thanks to Andrea Alleivi for suggested fixes.
   Thanks to Aaron Adams for reviewing the code. 
+
+  No warranty: use at your own risk.
 
 --*/
 
@@ -43,6 +46,8 @@
 #include "wmilib.h"
 
 #include "ntstrsafe.h"
+#include "Storport.h"
+#include "Ntddscsi.h"
 
 #include "Guid.h"
 
@@ -231,7 +236,7 @@ NTSTATUS MBRFReadWrite(IN PDEVICE_OBJECT DeviceObject,IN PIRP Irp) {
     if (deviceExtension->PhysicalDeviceNameBuffer[0] == 0) {   
         status = MBRFNextDrv(DeviceObject, Irp);
         IoReleaseRemoveLock(&deviceExtension->RemoveLock, Irp);
-        return (status);
+        return status;
     }
 
     IoCopyCurrentIrpStackLocationToNext(Irp);
@@ -404,6 +409,137 @@ VOID MBRFUnload(IN PDRIVER_OBJECT DriverObject) {
     return;
 }
 
+NTSTATUS MBRFDevControl (IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp) {
+	PDEVICE_EXTENSION		deviceExtension   = DeviceObject->DeviceExtension;
+    PIO_STACK_LOCATION		currentIrpStack   = IoGetCurrentIrpStackLocation(Irp);
+    NTSTATUS				status;
+	ULONG					controlCode;
+	ULONG					scsiSize;
+	PCDB					cdb;
+	UCHAR					opCode;
+	UCHAR					passthrough_ex = FALSE;
+	ULONG					cdblen;
+	ULONG					sector;
+	ULONGLONG				sector16;
+	ULONG					response;
+    UNICODE_STRING			title, text;
+	ULONG_PTR				param[3];
+
+	status = IoAcquireRemoveLock(&deviceExtension->RemoveLock, Irp);
+
+    if (!NT_SUCCESS(status)) {
+        Irp->IoStatus.Status = status;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return status;
+    }
+	controlCode = currentIrpStack->Parameters.DeviceIoControl.IoControlCode;
+	if ( controlCode == IOCTL_SCSI_PASS_THROUGH || controlCode == IOCTL_SCSI_PASS_THROUGH_DIRECT ||
+         controlCode == IOCTL_SCSI_PASS_THROUGH_EX || controlCode == IOCTL_SCSI_PASS_THROUGH_DIRECT_EX) {
+			passthrough_ex = (controlCode == IOCTL_SCSI_PASS_THROUGH_EX || controlCode == IOCTL_SCSI_PASS_THROUGH_DIRECT_EX);
+ 			if (passthrough_ex)
+				scsiSize = sizeof(SCSI_PASS_THROUGH_EX);
+			else
+				scsiSize = sizeof(SCSI_PASS_THROUGH);
+#if defined (_WIN64)
+            if (IoIs32bitProcess(Irp)) {
+				if (passthrough_ex)
+					scsiSize = sizeof(SCSI_PASS_THROUGH32_EX);
+				else
+					scsiSize = sizeof(SCSI_PASS_THROUGH32);
+			}
+#endif
+            if (currentIrpStack->Parameters.DeviceIoControl.InputBufferLength < scsiSize){
+                    Irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
+					IoReleaseRemoveLock(&deviceExtension->RemoveLock, Irp);
+					IoCompleteRequest(Irp, IO_NO_INCREMENT);
+					return STATUS_INVALID_PARAMETER;
+			}
+			if (passthrough_ex) {
+				cdb = (PCDB)((PSCSI_PASS_THROUGH_EX)(Irp->AssociatedIrp.SystemBuffer))->Cdb;
+				cdblen = ((PSCSI_PASS_THROUGH_EX)(Irp->AssociatedIrp.SystemBuffer))->CdbLength;
+			} else {
+				cdb = (PCDB)((PSCSI_PASS_THROUGH)(Irp->AssociatedIrp.SystemBuffer))->Cdb;
+				cdblen = ((PSCSI_PASS_THROUGH)(Irp->AssociatedIrp.SystemBuffer))->CdbLength;
+			}
+#if defined (_WIN64)
+			if (IoIs32bitProcess(Irp)) {
+				if (passthrough_ex)
+					cdb = (PCDB)((PSCSI_PASS_THROUGH32_EX)(Irp->AssociatedIrp.SystemBuffer))->Cdb;
+					cdblen = ((PSCSI_PASS_THROUGH32_EX)(Irp->AssociatedIrp.SystemBuffer))->CdbLength;
+				else 
+					cdb = (PCDB)((PSCSI_PASS_THROUGH32)(Irp->AssociatedIrp.SystemBuffer))->Cdb;
+					cdblen = ((PSCSI_PASS_THROUGH32)(Irp->AssociatedIrp.SystemBuffer))->CdbLength;
+			}
+#endif
+			if (cdblen < 6) {
+				Irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
+				IoReleaseRemoveLock(&deviceExtension->RemoveLock, Irp);
+				IoCompleteRequest(Irp, IO_NO_INCREMENT);
+				return STATUS_INVALID_PARAMETER;
+			}
+			if (cdb) {
+				opCode=cdb->CDB6GENERIC.OperationCode; 
+				sector = 0xFFFFFFFF;
+				switch (opCode) {
+				// 6 command
+				case SCSIOP_WRITE6:
+				// 10 commands
+				case SCSIOP_WRITE:
+				case SCSIOP_WRITE_VERIFY:
+				case SCSIOP_WRITE_LONG:
+				case SCSIOP_WRITE_SAME:
+				case SCSIOP_WRITE_DATA_BUFF:
+				case SCSIOP_XDWRITE:
+				case SCSIOP_XDWRITE_READ:
+				// 12 commands
+				case SCSIOP_WRITE12:
+				case SCSIOP_WRITE_VERIFY12:
+				// 16 commands:
+				case SCSIOP_WRITE16:
+				case SCSIOP_WRITE_VERIFY16: 
+				case SCSIOP_WRITE_LONG16:
+				case SCSIOP_XDWRITE_EXTENDED16:
+					switch (cdblen) {
+						case 16: 
+							REVERSE_BYTES_QUAD(&sector16, &cdb->CDB16.LogicalBlock);
+							if (sector16 == 0)
+								sector = 0;
+							break;
+						case 12:
+						case 10:
+							REVERSE_BYTES(&sector, &cdb->CDB10.LogicalBlockByte0);
+							break;
+						case 6:
+							sector = ((DWORD) cdb->CDB6READWRITE.LogicalBlockMsb1 << 16) + ((DWORD) cdb->CDB6READWRITE.LogicalBlockMsb0 << 8)
+									+ cdb->CDB6READWRITE.LogicalBlockLsb;
+							break;
+						default:
+							// variable length CDB, ignore for now
+							;
+					}
+					if (sector == 0) {
+						DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "MBRF: scsi write sector 0 (disk %d, partition %d)\n", deviceExtension->DiskNumber, deviceExtension->PartitionNumber);
+						RtlInitUnicodeString(&title, L"Cisco Talos MBRFilter");
+						RtlInitUnicodeString(&text, L"An application is attempting to use a SCSI Passthrough command to write to sector 0 on a disk. Please reboot in Safe Mode if you wish to do this.");
+						param[0]= (ULONG_PTR) &text;
+						param[1]= (ULONG_PTR) &title;
+						param[2]= 0x40;
+						ExRaiseHardError(STATUS_SERVICE_NOTIFICATION, 3, 3, param, 1, &response);
+						Irp->IoStatus.Status = STATUS_ACCESS_DENIED;
+						IoReleaseRemoveLock(&deviceExtension->RemoveLock, Irp);
+						IoCompleteRequest(Irp, IO_NO_INCREMENT);
+						return STATUS_ACCESS_DENIED;
+					}
+				}
+			}
+
+	}
+
+    IoCopyCurrentIrpStackLocationToNext(Irp);
+	IoSetCompletionRoutine(Irp, MBRFIoCompletion, DeviceObject, TRUE, TRUE, TRUE);
+	return IoCallDriver(deviceExtension->TargetDeviceObject, Irp);
+} 
+
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath) {
 
     ULONG               i;
@@ -427,7 +563,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
     DriverObject->MajorFunction[IRP_MJ_WRITE]           = MBRFReadWrite;
     DriverObject->MajorFunction[IRP_MJ_SYSTEM_CONTROL]  = MBRFWmi;
     DriverObject->MajorFunction[IRP_MJ_PNP]             = MBRFDispatchPnp;
-
+	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL]  = MBRFDevControl;
     DriverObject->DriverExtension->AddDevice            = MBRFAddDevice;
     DriverObject->DriverUnload                          = MBRFUnload;
 

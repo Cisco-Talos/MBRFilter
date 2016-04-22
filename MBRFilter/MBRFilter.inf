@@ -1,9 +1,5 @@
 ; MBRFilter.inf
 ;
-; Installation inf for the Disk Performance Monitor Filter driver [ DDK Sample ]
-;
-; Copyright (c) Microsoft Corporation
-;
 
 [Version]
 Signature = "$Windows NT$"
