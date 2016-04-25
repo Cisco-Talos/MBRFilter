@@ -50,7 +50,7 @@ BOOL doWrite(HANDLE hDisk, unsigned char *buf, DWORD read, int drivenumber, char
 	return success;
 }
 
-int _tmain(int argc, _TCHAR* argv[])
+int _tmain(int argc, char* argv[])
 {
 	DWORD read, pos;
 	unsigned char buf[512];

@@ -464,12 +464,13 @@ NTSTATUS MBRFDevControl (IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp) {
 			}
 #if defined (_WIN64)
 			if (IoIs32bitProcess(Irp)) {
-				if (passthrough_ex)
+				if (passthrough_ex) {
 					cdb = (PCDB)((PSCSI_PASS_THROUGH32_EX)(Irp->AssociatedIrp.SystemBuffer))->Cdb;
 					cdblen = ((PSCSI_PASS_THROUGH32_EX)(Irp->AssociatedIrp.SystemBuffer))->CdbLength;
-				else 
+				} else  {
 					cdb = (PCDB)((PSCSI_PASS_THROUGH32)(Irp->AssociatedIrp.SystemBuffer))->Cdb;
 					cdblen = ((PSCSI_PASS_THROUGH32)(Irp->AssociatedIrp.SystemBuffer))->CdbLength;
+				}
 			}
 #endif
 			if (cdblen < 6) {
