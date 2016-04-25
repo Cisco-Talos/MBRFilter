@@ -13,6 +13,10 @@ CatalogFile=MBRFilter.cat
 ; General installation section
 ;
 
+[DefaultInstall]
+CopyFiles = @MBRFilter.sys
+Addreg    = MBRFilter.AddReg
+
 [DefaultInstall.NT]
 CopyFiles = @MBRFilter.sys
 Addreg    = MBRFilter.AddReg
@@ -27,6 +31,9 @@ HKLM, System\CurrentControlSet\Control\Class\{4d36e967-e325-11ce-bfc1-08002be103
 ;
 ; Service installation section
 ;
+
+[DefaultInstall.Services]
+AddService = MBRFilter, , MBRFilter.Service.Install
 
 [DefaultInstall.NT.Services]
 AddService = MBRFilter, , MBRFilter.Service.Install
