@@ -19,6 +19,14 @@
 		Sign mode: Test Sign
 		Test certificate: generate or select one from your store.
 
+To remove MBRFilter, follow these steps:
+
+- Remove the line MBRFilter from the UpperFilters registry key in (only
+remove MBRFilter, there might be other disk drivers here):
+
+HKLM\System\CurrentControlSet\Control\Class\{4d36e967-e325-11ce-bfc1-08002be10318}
+
+- Reboot
 
   AccessMBR
 
