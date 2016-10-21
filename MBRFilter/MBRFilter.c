@@ -23,7 +23,7 @@
   Copyright (C) 2016 Cisco Systems Inc
 
   Thanks to Andrea Alleivi for suggested fixes.
-  Thanks to Aaron Adams for reviewing the code. 
+  Thanks to Aaron Adams and Ilja Van Sprundel for reviewing the code. 
 
   No warranty: use at your own risk.
 
