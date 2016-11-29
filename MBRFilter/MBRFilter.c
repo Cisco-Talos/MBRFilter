@@ -336,6 +336,7 @@ NTSTATUS MBRFQueryWmiRegInfo(IN PDEVICE_OBJECT DeviceObject,OUT ULONG *RegFlags,
 	size = deviceExtension->PhysicalDeviceName.Length + sizeof(UNICODE_NULL);
     InstanceName->Buffer = ExAllocatePool(PagedPool, size);
     if (InstanceName->Buffer) {
+	RtlCopyUnicodeString(InstanceName, &deviceExtension->PhysicalDeviceName);
         *RegistryPath = &MBRFRegistryPath;
         *RegFlags = WMIREG_FLAG_INSTANCE_PDO | WMIREG_FLAG_EXPENSIVE;
         *Pdo = deviceExtension->PhysicalDeviceObject;
