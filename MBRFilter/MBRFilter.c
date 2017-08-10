@@ -548,7 +548,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,"MBRF: loading\n");
     MBRFRegistryPath.MaximumLength = RegistryPath->Length + sizeof(UNICODE_NULL);
     MBRFRegistryPath.Buffer = ExAllocatePool(PagedPool,MBRFRegistryPath.MaximumLength);
-    if (!MBRFRegistryPath.Buffer) {
+    if (MBRFRegistryPath.Buffer) {
         RtlCopyUnicodeString(&MBRFRegistryPath, RegistryPath);
     } else {
         MBRFRegistryPath.Length = 0;
